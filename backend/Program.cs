@@ -58,15 +58,20 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
     try
     {
         //validate that the player name is not profane
-        var profaneCheckPrompt = $"Is the player name '{score.PlayerName}' profane? Answer with 'yes' or 'no'.";
+        var profaneCheckPrompt = $"The following is a player name submitted to a game. Determine if it contains any inappropriate, offensive, profane, harmful, or unsafe content, including insults, hate speech, email addresses, or anything unsuitable for children. Answer strictly with 'yes' or 'no'";
         var chatClient = openAI.GetChatClient("gpt-4o");
         ChatCompletion completion = chatClient.CompleteChat(
             [
-                new SystemChatMessage(@""),
-                new UserChatMessage(score.PlayerName),
+                new SystemChatMessage(profaneCheckPrompt),
+                new UserChatMessage($"{score.PlayerName}"),
             ]);
 
         var result = completion.Content[0].Text;
+
+        if (result.ToLower().Contains("yes"))
+        {
+            return Results.BadRequest("invalid player name");
+        }
 
         score.Created = DateTime.UtcNow;
         db.PlayerScores.Add(score);

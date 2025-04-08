@@ -47,6 +47,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   gameTimeMs = 0;
   private startTime = 0;
   private animationId: number | null = null;
+  private leaderboardInterval: number | undefined;
 
   // Game dimensions
   private readonly WORLD_WIDTH = 40;  
@@ -64,10 +65,25 @@ export class GameComponent implements AfterViewInit, OnDestroy {
 
   gameCompleted = false;
   playerName = '';
+  scoreSubmitted = false;
   leaderboardScores: Array<{playerName: string, time: number}> = [];
+  errorMessage = '';
 
   constructor(private gameService: GameService) {
     this.loadLeaderboard();
+    this.startLeaderboardRefresh();
+    // Load saved player name from localStorage
+    const savedName = localStorage.getItem('playerName');
+    if (savedName) {
+      this.playerName = savedName;
+    }
+  }
+
+  private startLeaderboardRefresh() {
+    // Refresh every 10 seconds
+    this.leaderboardInterval = window.setInterval(() => {
+      this.loadLeaderboard();
+    }, 10000);
   }
 
   ngAfterViewInit() {
@@ -81,6 +97,9 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy() {
     if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId);
+    }
+    if (this.leaderboardInterval) {
+      clearInterval(this.leaderboardInterval);
     }
     this.renderer.dispose();
   }
@@ -450,8 +469,24 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  restartGame() {
+    this.gameCompleted = false;
+    this.scoreSubmitted = false;
+    this.playerName = '';
+    this.errorMessage = '';
+    this.gameTime = 0;
+    this.gameTimeMs = 0;
+    this.gameStarted = false;
+    this.respawnPlayer();
+  }
+
+  onNameChange(newName: string) {
+    localStorage.setItem('playerName', newName);
+  }
+
   submitScore() {
-    if (this.playerName && this.gameCompleted) {
+    if (this.playerName && this.gameCompleted && !this.scoreSubmitted) {
+      this.errorMessage = ''; // Clear any previous error
       const score = {
         playerName: this.playerName,
         time: this.gameTime + (this.gameTimeMs / 1000),
@@ -461,10 +496,16 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       this.gameService.submitScore(score).subscribe({
         next: () => {
           this.loadLeaderboard();
+          this.errorMessage = ''; // Clear error on success
+          this.scoreSubmitted = true; // Set flag after successful submission
         },
         error: (error) => {
           console.error('Failed to submit score:', error);
-          // TODO: Could add user-facing error message here
+          if (error.status === 400) {
+            this.errorMessage = 'Username contains inappropriate content or email. Please choose a different name.';
+          } else {
+            this.errorMessage = 'Failed to submit score. Please try again.';
+          }
         }
       });
     }

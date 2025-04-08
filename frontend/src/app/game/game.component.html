@@ -1,13 +1,20 @@
-<p>game works!</p>
-
 <div #gameCanvasContainer class="game-container">
   <!-- Overlay that blocks game interaction when completed -->
   <div *ngIf="gameCompleted" class="game-overlay">
     <div class="game-complete-ui">
       <h2>Game Complete!</h2>
       <p>Your time: {{gameTime}}.{{gameTimeMs.toString().padStart(3, '0')}}s</p>
-      <input #nameInput [(ngModel)]="playerName" placeholder="Enter your name" />
-      <button (click)="submitScore()">Submit Score</button>
+      <div *ngIf="!scoreSubmitted">
+        <input #nameInput [(ngModel)]="playerName" 
+               (ngModelChange)="onNameChange($event)"
+               (keyup.enter)="submitScore()"
+               placeholder="Enter your name" data-1p-ignore/>
+        <div *ngIf="errorMessage" class="error-message">{{errorMessage}}</div>
+        <button (click)="submitScore()">Submit Score</button>
+      </div>
+      <div *ngIf="scoreSubmitted" class="success-message">
+        Score submitted successfully!
+      </div>
 
       <div class="leaderboard">
         <h3>Leaderboard</h3>
@@ -15,13 +22,23 @@
           {{score.playerName}} - {{score.time.toFixed(3)}}s
         </div>
       </div>
+      
+      <button (click)="restartGame()" class="try-again-button">Play Again!</button>
     </div>
   </div>
 
-  <!-- In-game UI -->
-  <div class="game-ui" *ngIf="!gameCompleted">
-    <div *ngIf="gameStarted" class="timer">
+  <!-- Game UI (Timer) -->
+  <div class="game-ui" *ngIf="!gameCompleted && gameStarted">
+    <div class="timer">
       Time: {{gameTime}}.{{gameTimeMs.toString().padStart(3, '0')}}s
+    </div>
+  </div>
+
+  <!-- Persistent Leaderboard -->
+  <div class="in-game-leaderboard">
+    <h3>Top Players</h3>
+    <div *ngFor="let score of leaderboardScores.slice(0, 5)">
+      {{score.playerName}} - {{score.time.toFixed(3)}}s
     </div>
   </div>
 
