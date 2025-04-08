@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, catchError } from 'rxjs';
 import { AppInsightsService } from '../services/app-insights.service';
+import { environment } from '../../environments/environment';
 
 interface PlayerScore {
   playerName: string;
@@ -13,7 +14,7 @@ interface PlayerScore {
   providedIn: 'root'
 })
 export class GameService {
-  private apiUrl = 'http://localhost:5048/api'; // Update with your backend URL
+  private apiUrl = environment.API; // Update with your backend URL
 
   constructor(
     private http: HttpClient,
