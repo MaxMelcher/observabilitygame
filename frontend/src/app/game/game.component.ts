@@ -529,33 +529,44 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     localStorage.setItem('playerName', newName);
   }
 
-  submitScore() {
+  async submitScore() {
     if (this.playerName && this.gameCompleted && !this.scoreSubmitted) {
-      this.errorMessage = ''; // Clear any previous error
-      this.isSubmittingScore = true; // Set loading state
+      this.errorMessage = '';
+      this.isSubmittingScore = true;
       const score = {
         playerName: this.playerName,
         time: this.gameTime + (this.gameTimeMs / 1000),
         created: new Date()
       };
       
-      this.gameService.submitScore(score).subscribe({
-        next: () => {
-          this.loadLeaderboard();
-          this.errorMessage = ''; // Clear error on success
-          this.scoreSubmitted = true; // Set flag after successful submission
-          this.isSubmittingScore = false; // Clear loading state
-        },
-        error: (error) => {
-          console.error('Failed to submit score:', error);
-          if (error.status === 400) {
-            this.errorMessage = 'Username contains inappropriate content or email. Please choose a different name.';
-          } else {
-            this.errorMessage = 'Failed to submit score. Please try again.';
+      try {
+        const scoreObservable = await this.gameService.submitScore(score);
+        scoreObservable.subscribe({
+          next: () => {
+            this.loadLeaderboard();
+            this.errorMessage = '';
+            this.scoreSubmitted = true;
+            this.isSubmittingScore = false;
+          },
+          error: (error) => {
+            console.error('Failed to submit score:', error);
+            if (error.status === 400) {
+              if (error.error === 'invalid hash') {
+                this.errorMessage = 'Score submission failed: Data integrity check failed.';
+              } else {
+                this.errorMessage = 'Username contains inappropriate content or email. Please choose a different name.';
+              }
+            } else {
+              this.errorMessage = 'Failed to submit score. Please try again.';
+            }
+            this.isSubmittingScore = false;
           }
-          this.isSubmittingScore = false; // Clear loading state on error
-        }
-      });
+        });
+      } catch (error) {
+        console.error('Failed to generate score hash:', error);
+        this.errorMessage = 'Failed to submit score. Please try again.';
+        this.isSubmittingScore = false;
+      }
     }
   }
 

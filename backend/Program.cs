@@ -9,6 +9,8 @@ using Microsoft.OpenApi.Models;
 using OpenAI.Chat;
 using Serilog;
 using Serilog.Events;
+using System.Security.Cryptography;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -78,12 +80,34 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
             logger.LogCritical(crashException, "Game server crash triggered by user");
             throw crashException;
         }
+
         if (score.PlayerName == "timeout")
         {
             Thread.Sleep(90000);
             var timeoutException = new Exception("GAME SERVER TIMEOUT!");
             logger.LogCritical(timeoutException, "Game server timeout triggered by user");
             throw timeoutException;
+        }
+
+        // Verify hash
+        var secretKey = "observability-game-2025"; // In production, this should be in configuration
+        var timeStr = score.Time.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+        var payload = $"{score.PlayerName}|{timeStr}|{score.Created.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")}|{secretKey}";
+        logger.LogInformation("Backend payload for hash: {Payload}", payload);
+        var computedHash = ComputeSha256Hash(payload);
+        logger.LogInformation("Backend computed hash: {Hash}, Received hash: {ReceivedHash}", computedHash, score.Hash);
+
+        if (computedHash != score.Hash)
+        {
+            logger.LogWarning("Invalid hash detected for score submission: {PlayerName}, Expected: {ExpectedHash}, Got: {ReceivedHash}", 
+                score.PlayerName, computedHash, score.Hash);
+            var telemetryProperties = new Dictionary<string, string>
+            {
+                { "PlayerName", score.PlayerName },
+                { "AttemptType", "InvalidHash" }
+            };
+            telemetryClient.TrackEvent("InvalidHashAttempt", telemetryProperties);
+            return Results.BadRequest("invalid hash");
         }
 
         //validate that the player name is not profane
@@ -126,3 +150,17 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
 .WithName("SubmitScore");
 
 app.Run();
+
+string ComputeSha256Hash(string rawData)
+{
+    using (SHA256 sha256Hash = SHA256.Create())
+    {
+        byte[] bytes = sha256Hash.ComputeHash(Encoding.UTF8.GetBytes(rawData));
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < bytes.Length; i++)
+        {
+            builder.Append(bytes[i].ToString("x2"));
+        }
+        return builder.ToString();
+    }
+}
