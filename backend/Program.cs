@@ -4,6 +4,7 @@ using backend.Data;
 using backend.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using OpenAI.Chat;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,11 +57,13 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
 {
     try
     {
-        // Check for profanity using Azure OpenAI GPT-4
-        ChatCompletion completion = openAI.CompleteChat(
+        //validate that the player name is not profane
+        var profaneCheckPrompt = $"Is the player name '{score.PlayerName}' profane? Answer with 'yes' or 'no'.";
+        var chatClient = openAI.GetChatClient("gpt-4o");
+        ChatCompletion completion = chatClient.CompleteChat(
             [
                 new SystemChatMessage(@""),
-                new UserChatMessage($"{score.PlayerName}"),
+                new UserChatMessage(score.PlayerName),
             ]);
 
         var result = completion.Content[0].Text;

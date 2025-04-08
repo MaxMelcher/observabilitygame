@@ -6,7 +6,7 @@
     <div class="game-complete-ui">
       <h2>Game Complete!</h2>
       <p>Your time: {{gameTime}}.{{gameTimeMs.toString().padStart(3, '0')}}s</p>
-      <input [(ngModel)]="playerName" placeholder="Enter your name" />
+      <input #nameInput [(ngModel)]="playerName" placeholder="Enter your name" />
       <button (click)="submitScore()">Submit Score</button>
 
       <div class="leaderboard">

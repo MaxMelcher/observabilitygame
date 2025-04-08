@@ -5,15 +5,15 @@ import { AppInsightsService } from '../services/app-insights.service';
 
 interface PlayerScore {
   playerName: string;
-  time: string;
-  dateRecorded: string;
+  time: number;
+  created: Date;
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class GameService {
-  private apiUrl = 'https://localhost:7267/api'; // Update with your backend URL
+  private apiUrl = 'http://localhost:5048/api'; // Update with your backend URL
 
   constructor(
     private http: HttpClient,

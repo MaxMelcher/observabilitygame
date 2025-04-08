@@ -27,6 +27,7 @@ interface BouncePlatform {
 })
 export class GameComponent implements AfterViewInit, OnDestroy {
   @ViewChild('gameCanvasContainer') gameContainer!: ElementRef;
+  @ViewChild('nameInput') nameInput!: ElementRef;
   
   private scene!: THREE.Scene;
   private camera!: THREE.OrthographicCamera;
@@ -439,23 +440,45 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       this.playerVelocity.y = 0;
       // Disable controls
       this.gameStarted = false;
+      
+      // Focus the name input after a short delay to ensure the UI is ready
+      setTimeout(() => {
+        if (this.nameInput) {
+          this.nameInput.nativeElement.focus();
+        }
+      }, 100);
     }
   }
 
   submitScore() {
     if (this.playerName && this.gameCompleted) {
-      this.gameService.submitScore({
+      const score = {
         playerName: this.playerName,
-        time: this.gameTime + (this.gameTimeMs / 1000)
-      }).subscribe(() => {
-        this.loadLeaderboard();
+        time: this.gameTime + (this.gameTimeMs / 1000),
+        created: new Date()
+      };
+      
+      this.gameService.submitScore(score).subscribe({
+        next: () => {
+          this.loadLeaderboard();
+        },
+        error: (error) => {
+          console.error('Failed to submit score:', error);
+          // TODO: Could add user-facing error message here
+        }
       });
     }
   }
 
   private loadLeaderboard() {
-    this.gameService.getLeaderboard().subscribe(scores => {
-      this.leaderboardScores = scores;
+    this.gameService.getTopScores().subscribe({
+      next: (scores) => {
+        this.leaderboardScores = scores;
+      },
+      error: (error) => {
+        console.error('Failed to load leaderboard:', error);
+        this.leaderboardScores = []; // Reset to empty array on error
+      }
     });
   }
 }
