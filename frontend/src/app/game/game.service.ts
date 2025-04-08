@@ -27,7 +27,6 @@ export class GameService {
     const timeStr = score.time.toFixed(3);
     const createdMs = score.created.getTime(); // Get Unix timestamp in milliseconds
     const payload = `${score.playerName}|${timeStr}|${createdMs}|${this.SECRET_KEY}`;
-    console.log('Payload for hashing:', payload);
     return await this.sha256(payload);
   }
 
@@ -51,8 +50,6 @@ export class GameService {
   async submitScore(score: PlayerScore): Promise<Observable<PlayerScore>> {
     this.appInsights.trackEvent('SubmitScore', { playerName: score.playerName, time: score.time });
     score.hash = await this.generateHash(score);
-    console.log(score.hash)
-    console.log()
     return this.http.post<PlayerScore>(`${this.apiUrl}/scores`, score).pipe(
       catchError(error => {
         this.appInsights.trackException(error);
