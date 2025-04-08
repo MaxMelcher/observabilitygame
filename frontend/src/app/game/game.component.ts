@@ -502,6 +502,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     this.gameTimeMs = 0;
     this.gameStarted = false;
     this.startTime = Date.now();
+    this.timeoutOccurred = false;
     this.respawnPlayer();
   }
 

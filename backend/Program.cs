@@ -3,11 +3,21 @@ using Azure.AI.OpenAI;
 using backend.Data;
 using backend.Models;
 using Microsoft.ApplicationInsights;
+using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using OpenAI.Chat;
+using Serilog;
+using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration)
+    .CreateLogger();
+
+builder.Host.UseSerilog();
 
 // Add services to the container.
 builder.Services.AddEndpointsApiExplorer();
@@ -58,7 +68,7 @@ app.MapGet("/api/scores", async (GameDbContext db) =>
 app.MapHealthChecks("/health");
 
 // Submit new score
-app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, PlayerScore score, ILogger<Program> logger) =>
+app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, PlayerScore score, ILogger<Program> logger, TelemetryClient telemetryClient) =>
 {
     try
     {
@@ -96,7 +106,6 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
                 { "PlayerName", score.PlayerName },
                 { "AttemptType", "InappropriateUsername" }
             };
-            TelemetryClient telemetryClient = new TelemetryClient();
             telemetryClient.TrackEvent("InappropriateUsernameAttempt", telemetryProperties);
             
             return Results.BadRequest("invalid player name");
