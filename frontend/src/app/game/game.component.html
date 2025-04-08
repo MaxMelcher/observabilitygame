@@ -1,4 +1,10 @@
 <div #gameCanvasContainer class="game-container">
+  <!-- Game Instructions -->
+  <div class="game-instructions" *ngIf="!gameCompleted">
+    <h3>Goal: Get to the Green Platform!</h3>
+    <p>Race against time to reach the goal. Be careful - touching the ground adds a time penalty!</p>
+  </div>
+
   <!-- Overlay that blocks game interaction when completed -->
   <div *ngIf="gameCompleted" class="game-overlay">
     <div class="game-complete-ui">
@@ -11,7 +17,9 @@
                (keyup.enter)="submitScore()"
                placeholder="Enter your name" data-1p-ignore/>
         <div *ngIf="errorMessage" class="error-message">{{errorMessage}}</div>
-        <button (click)="submitScore()">Submit Score</button>
+        <button (click)="submitScore()" [disabled]="isSubmittingScore">
+          {{ isSubmittingScore ? 'Submitting...' : 'Submit Score' }}
+        </button>
       </div>
       <div *ngIf="scoreSubmitted" class="success-message">
         Score submitted successfully!

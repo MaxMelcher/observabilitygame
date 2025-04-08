@@ -34,9 +34,8 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.UseHttpsRedirection();
 }
-
-app.UseHttpsRedirection();
 app.UseCors(builder => builder
     .AllowAnyOrigin()
     .AllowAnyMethod()
@@ -53,7 +52,7 @@ app.MapGet("/api/scores", async (GameDbContext db) =>
 .WithName("GetTopScores");
 
 // Submit new score
-app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, PlayerScore score) =>
+app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, PlayerScore score, ILogger<Program> logger) =>
 {
     try
     {
@@ -64,6 +63,7 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
         if (score.PlayerName == "timeout")
         {
             Thread.Sleep(90000);
+            throw new Exception("GAME SERVER TIMEOUT!");
         }
 
         //validate that the player name is not profane
@@ -79,6 +79,7 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
 
         if (result.ToLower().Contains("yes"))
         {
+            logger.LogWarning("Invalid player name attempt: {PlayerName}", score.PlayerName);
             return Results.BadRequest("invalid player name");
         }
 
@@ -88,9 +89,9 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
 
         return Results.Created($"/api/scores/{score.Id}", score);
     }
-    catch (Exception)
+    catch (Exception ex)
     {
-        // Application Insights will automatically capture this exception
+        logger.LogError(ex, "Error processing score submission");
         return Results.StatusCode(500);
     }
 })

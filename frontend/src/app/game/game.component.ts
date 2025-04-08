@@ -68,6 +68,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   timeoutOccurred = false;
   playerName = '';
   scoreSubmitted = false;
+  isSubmittingScore = false;  // Add this line
   leaderboardScores: Array<{playerName: string, time: number}> = [];
   errorMessage = '';
 
@@ -510,6 +511,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   submitScore() {
     if (this.playerName && this.gameCompleted && !this.scoreSubmitted) {
       this.errorMessage = ''; // Clear any previous error
+      this.isSubmittingScore = true; // Set loading state
       const score = {
         playerName: this.playerName,
         time: this.gameTime + (this.gameTimeMs / 1000),
@@ -521,6 +523,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
           this.loadLeaderboard();
           this.errorMessage = ''; // Clear error on success
           this.scoreSubmitted = true; // Set flag after successful submission
+          this.isSubmittingScore = false; // Clear loading state
         },
         error: (error) => {
           console.error('Failed to submit score:', error);
@@ -529,6 +532,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
           } else {
             this.errorMessage = 'Failed to submit score. Please try again.';
           }
+          this.isSubmittingScore = false; // Clear loading state on error
         }
       });
     }
