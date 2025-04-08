@@ -4,6 +4,20 @@ import { FormsModule } from '@angular/forms';
 import * as THREE from 'three';
 import { GameService } from './game.service';
 
+interface MovingPlatform {
+  mesh: THREE.Mesh;
+  startPos: THREE.Vector2;
+  endPos: THREE.Vector2;
+  speed: number;
+  progress: number;
+  direction: 1 | -1;
+}
+
+interface BouncePlatform {
+  mesh: THREE.Mesh;
+  bounceForce: number;
+}
+
 @Component({
   selector: 'app-game',
   templateUrl: './game.component.html',
@@ -20,13 +34,16 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   private player!: THREE.Mesh;
   private ground!: THREE.Mesh;
   private platforms: THREE.Mesh[] = [];
+  private movingPlatforms: MovingPlatform[] = [];
+  private bouncePlatforms: BouncePlatform[] = [];
   private goal!: THREE.Mesh;
   private startPlatform!: THREE.Mesh;
   
   private playerVelocity = new THREE.Vector2();
   private isJumping = false;
-  private gameStarted = false;
+  gameStarted = false;  // Changed to public
   gameTime = 0;
+  gameTimeMs = 0;
   private startTime = 0;
   private animationId: number | null = null;
 
@@ -37,6 +54,12 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   private readonly PLAYER_START_Y = 4;  // Increased height for starting platform
   private readonly GOAL_X = 16;  
   private readonly GOAL_Y = 4;
+
+  // Platform settings
+  private readonly PLATFORM_SPEED = 0.02;
+  private readonly VERTICAL_MOVE_DISTANCE = 3;
+  private readonly HORIZONTAL_MOVE_DISTANCE = 4;
+  private readonly BOUNCE_FORCE = 0.5;
 
   gameCompleted = false;
   playerName = '';
@@ -110,21 +133,18 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     const platformGeometry = new THREE.PlaneGeometry(3, 0.5);
     const platformMaterial = new THREE.MeshLambertMaterial({ color: 0x808080, side: THREE.DoubleSide });
     
-    // Start platform (wider for better landing)
+    // Start platform
     const startGeometry = new THREE.PlaneGeometry(4, 0.5);
     const startMaterial = new THREE.MeshLambertMaterial({ color: 0x4CAF50, side: THREE.DoubleSide });
     this.startPlatform = new THREE.Mesh(startGeometry, startMaterial);
     this.startPlatform.position.set(this.PLAYER_START_X, this.PLAYER_START_Y - 1, 0);
     this.scene.add(this.startPlatform);
     
-    // Create platforms with more controlled placement for a clear path
+    // Create static platforms
     const platformPositions = [
       { x: -12, y: 5 },
-      { x: -8, y: 4 },
       { x: -4, y: 5 },
-      { x: 0, y: 4 },
       { x: 4, y: 5 },
-      { x: 8, y: 4 },
       { x: 12, y: 5 }
     ];
 
@@ -132,6 +152,72 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       const platform = new THREE.Mesh(platformGeometry, platformMaterial);
       platform.position.set(pos.x, pos.y, 0);
       this.platforms.push(platform);
+      this.scene.add(platform);
+    }
+
+    // Add bounce platforms (blue)
+    const bouncePlatformGeometry = new THREE.PlaneGeometry(2, 0.5);
+    const bouncePlatformMaterial = new THREE.MeshLambertMaterial({ color: 0x2196F3, side: THREE.DoubleSide });
+    
+    const bouncePositions = [
+      { x: -6, y: 3 },
+      { x: 6, y: 3 }
+    ];
+
+    for (const pos of bouncePositions) {
+      const platform = new THREE.Mesh(bouncePlatformGeometry, bouncePlatformMaterial);
+      platform.position.set(pos.x, pos.y, 0);
+      this.bouncePlatforms.push({
+        mesh: platform,
+        bounceForce: this.BOUNCE_FORCE
+      });
+      this.scene.add(platform);
+    }
+
+    // Add moving platforms
+    const movingPlatformMaterial = new THREE.MeshLambertMaterial({ color: 0xe91e63, side: THREE.DoubleSide });
+
+    // Horizontal moving platforms
+    const horizontalMovers = [
+      { centerX: -8, y: 4 },
+      { centerX: 8, y: 4 }
+    ];
+
+    for (const pos of horizontalMovers) {
+      const platform = new THREE.Mesh(platformGeometry, movingPlatformMaterial);
+      platform.position.set(pos.centerX, pos.y, 0);
+      platform.rotation.z = Math.PI / 2; // Rotate 90 degrees around Z axis
+      
+      this.movingPlatforms.push({
+        mesh: platform,
+        startPos: new THREE.Vector2(pos.centerX - this.HORIZONTAL_MOVE_DISTANCE, pos.y),
+        endPos: new THREE.Vector2(pos.centerX + this.HORIZONTAL_MOVE_DISTANCE, pos.y),
+        speed: this.PLATFORM_SPEED,
+        progress: 0,
+        direction: 1
+      });
+      
+      this.scene.add(platform);
+    }
+
+    // Vertical moving platforms
+    const verticalMovers = [
+      { x: 0, centerY: 4 }
+    ];
+
+    for (const pos of verticalMovers) {
+      const platform = new THREE.Mesh(platformGeometry, movingPlatformMaterial);
+      platform.position.set(pos.x, pos.centerY, 0);
+      
+      this.movingPlatforms.push({
+        mesh: platform,
+        startPos: new THREE.Vector2(pos.x, pos.centerY - this.VERTICAL_MOVE_DISTANCE),
+        endPos: new THREE.Vector2(pos.x, pos.centerY + this.VERTICAL_MOVE_DISTANCE),
+        speed: this.PLATFORM_SPEED,
+        progress: 0,
+        direction: 1
+      });
+      
       this.scene.add(platform);
     }
 
@@ -182,6 +268,48 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  private updateMovingPlatforms() {
+    for (const platform of this.movingPlatforms) {
+      // Store old position for collision check
+      const oldX = platform.mesh.position.x;
+      const oldY = platform.mesh.position.y;
+      
+      // Update progress
+      platform.progress += platform.speed * platform.direction;
+      
+      // Check bounds and reverse direction if needed
+      if (platform.progress >= 1) {
+        platform.progress = 1;
+        platform.direction = -1;
+      } else if (platform.progress <= 0) {
+        platform.progress = 0;
+        platform.direction = 1;
+      }
+
+      // Calculate new position
+      const newX = platform.startPos.x + (platform.endPos.x - platform.startPos.x) * platform.progress;
+      const newY = platform.startPos.y + (platform.endPos.y - platform.startPos.y) * platform.progress;
+
+      // Check collision with static platforms before applying new position
+      platform.mesh.position.set(newX, newY, 0);
+      let collision = false;
+      
+      for (const staticPlatform of this.platforms) {
+        if (this.checkCollision(platform.mesh, staticPlatform)) {
+          collision = true;
+          break;
+        }
+      }
+
+      // If there's a collision, revert to old position and reverse direction
+      if (collision) {
+        platform.mesh.position.set(oldX, oldY, 0);
+        platform.direction *= -1;
+        platform.progress = platform.direction === 1 ? 0 : 1;
+      }
+    }
+  }
+
   private animate() {
     this.animationId = requestAnimationFrame(() => this.animate());
     
@@ -190,25 +318,52 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     this.player.position.y += this.playerVelocity.y;
     
     // Apply gravity
-    this.playerVelocity.y -= 0.015; // Slightly increased gravity
+    this.playerVelocity.y -= 0.015;
+    
+    // Update moving platforms
+    this.updateMovingPlatforms();
     
     // Check ground collision for respawn
     const playerBottom = this.player.position.y - 0.5;
-    if (playerBottom < -1) { // Ground is at -2, so check slightly above
+    if (playerBottom < -1) {
       this.respawnPlayer();
     }
 
-    // Check platform collisions including start platform
+    // Check platform collisions including start platform and moving platforms
     let onPlatform = false;
-    const platforms = [...this.platforms, this.startPlatform, this.goal];
+    const allPlatforms = [
+      ...this.platforms, 
+      this.startPlatform, 
+      this.goal,
+      ...this.movingPlatforms.map(p => p.mesh)
+    ];
     
-    for (const platform of platforms) {
+    // First check bounce platforms
+    for (const bouncePlatform of this.bouncePlatforms) {
+      if (this.checkCollision(this.player, bouncePlatform.mesh)) {
+        // Bounce the player up with the bounce force
+        this.playerVelocity.y = bouncePlatform.bounceForce;
+        this.isJumping = true;
+      }
+    }
+
+    // Then check regular platforms
+    for (const platform of allPlatforms) {
       if (this.checkCollision(this.player, platform)) {
         if (this.playerVelocity.y < 0) {
           this.player.position.y = platform.position.y + 0.75;
           this.playerVelocity.y = 0;
           this.isJumping = false;
           onPlatform = true;
+
+          // If it's a moving platform, move the player with it
+          const movingPlatform = this.movingPlatforms.find(p => p.mesh === platform);
+          if (movingPlatform) {
+            // Add platform's horizontal movement to player
+            const platformDeltaX = (movingPlatform.endPos.x - movingPlatform.startPos.x) * 
+                                 movingPlatform.speed * movingPlatform.direction;
+            this.player.position.x += platformDeltaX;
+          }
         }
       }
     }
@@ -220,7 +375,9 @@ export class GameComponent implements AfterViewInit, OnDestroy {
 
     // Update game time
     if (this.gameStarted && !this.gameCompleted) {
-      this.gameTime = Math.floor((Date.now() - this.startTime) / 1000);
+      const currentTime = Date.now() - this.startTime;
+      this.gameTime = Math.floor(currentTime / 1000);
+      this.gameTimeMs = currentTime % 1000;
     }
     
     this.renderer.render(this.scene, this.camera);
@@ -250,6 +407,8 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       // Stop player movement
       this.playerVelocity.x = 0;
       this.playerVelocity.y = 0;
+      // Disable controls
+      this.gameStarted = false;
     }
   }
 
@@ -257,7 +416,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     if (this.playerName && this.gameCompleted) {
       this.gameService.submitScore({
         playerName: this.playerName,
-        time: this.gameTime
+        time: this.gameTime + (this.gameTimeMs / 1000)
       }).subscribe(() => {
         this.loadLeaderboard();
       });

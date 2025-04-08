@@ -1,21 +1,27 @@
 <p>game works!</p>
 
 <div #gameCanvasContainer class="game-container">
-  <div class="game-ui">
-    <div *ngIf="gameTime" class="timer">Time: {{gameTime}}s</div>
-    
-    <div *ngIf="gameCompleted" class="leaderboard-form">
+  <!-- Overlay that blocks game interaction when completed -->
+  <div *ngIf="gameCompleted" class="game-overlay">
+    <div class="game-complete-ui">
       <h2>Game Complete!</h2>
-      <p>Your time: {{gameTime}}s</p>
+      <p>Your time: {{gameTime}}.{{gameTimeMs.toString().padStart(3, '0')}}s</p>
       <input [(ngModel)]="playerName" placeholder="Enter your name" />
       <button (click)="submitScore()">Submit Score</button>
-    </div>
 
-    <div class="leaderboard">
-      <h3>Leaderboard</h3>
-      <div *ngFor="let score of leaderboardScores">
-        {{score.playerName}} - {{score.time}}s
+      <div class="leaderboard">
+        <h3>Leaderboard</h3>
+        <div *ngFor="let score of leaderboardScores">
+          {{score.playerName}} - {{score.time.toFixed(3)}}s
+        </div>
       </div>
+    </div>
+  </div>
+
+  <!-- In-game UI -->
+  <div class="game-ui" *ngIf="!gameCompleted">
+    <div *ngIf="gameStarted" class="timer">
+      Time: {{gameTime}}.{{gameTimeMs.toString().padStart(3, '0')}}s
     </div>
   </div>
 </div>
