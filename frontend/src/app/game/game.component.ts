@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import * as THREE from 'three';
 import { GameService } from './game.service';
+import { AppInsightsService } from '../services/app-insights.service';
 
 interface MovingPlatform {
   mesh: THREE.Mesh;
@@ -64,12 +65,16 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   private readonly BOUNCE_FORCE = 0.6;
 
   gameCompleted = false;
+  timeoutOccurred = false;
   playerName = '';
   scoreSubmitted = false;
   leaderboardScores: Array<{playerName: string, time: number}> = [];
   errorMessage = '';
 
-  constructor(private gameService: GameService) {
+  constructor(
+    private gameService: GameService,
+    private appInsights: AppInsightsService
+  ) {
     this.loadLeaderboard();
     this.startLeaderboardRefresh();
     // Load saved player name from localStorage
@@ -80,10 +85,10 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   }
 
   private startLeaderboardRefresh() {
-    // Refresh every 10 seconds
+    const REFRESH_INTERVAL_MS = 10000; // 10 seconds
     this.leaderboardInterval = window.setInterval(() => {
       this.loadLeaderboard();
-    }, 10000);
+    }, REFRESH_INTERVAL_MS);
   }
 
   ngAfterViewInit() {
@@ -136,7 +141,13 @@ export class GameComponent implements AfterViewInit, OnDestroy {
 
   private initPlayer() {
     const geometry = new THREE.PlaneGeometry(1, 1);
-    const material = new THREE.MeshLambertMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
+    // Load the Azure logo texture
+    const textureLoader = new THREE.TextureLoader();
+    const material = new THREE.MeshBasicMaterial({
+      map: textureLoader.load('assets/azure.svg'),
+      transparent: true,
+      side: THREE.DoubleSide
+    });
     this.player = new THREE.Mesh(geometry, material);
     this.respawnPlayer();
     this.scene.add(this.player);
@@ -356,6 +367,13 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     const playerBottom = this.player.position.y - 0.5;
     if (playerBottom < -1) {
       this.respawnPlayer();
+    }
+
+    // Check for timeout
+    if (this.gameStarted && !this.gameCompleted && this.gameTime >= 60) {
+      this.timeoutOccurred = true;
+      this.appInsights.trackEvent('GameTimeout', { time: this.gameTime + (this.gameTimeMs / 1000) });
+      this.completeGame();
     }
 
     // Check platform collisions

@@ -2,7 +2,8 @@
   <!-- Overlay that blocks game interaction when completed -->
   <div *ngIf="gameCompleted" class="game-overlay">
     <div class="game-complete-ui">
-      <h2>Game Complete!</h2>
+      <h2>{{ timeoutOccurred ? 'Time is Up!' : 'Game Complete!' }}</h2>
+      <p *ngIf="timeoutOccurred" class="timeout-message">Sorry, you didn't make it in time!</p>
       <p>Your time: {{gameTime}}.{{gameTimeMs.toString().padStart(3, '0')}}s</p>
       <div *ngIf="!scoreSubmitted">
         <input #nameInput [(ngModel)]="playerName" 
