@@ -363,14 +363,19 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     // Update moving platforms
     this.updateMovingPlatforms();
     
-    // Check ground collision for respawn
+    // Check ground collision for respawn and penalty
     const playerBottom = this.player.position.y - 0.5;
     if (playerBottom < -1) {
       this.respawnPlayer();
+      if (this.gameStarted && !this.gameCompleted) {
+        // Add 1 second penalty for touching the ground
+        this.startTime -= 5000;
+        this.appInsights.trackEvent('GroundTouchPenalty', { time: this.gameTime + (this.gameTimeMs / 1000) });
+      }
     }
 
     // Check for timeout
-    if (this.gameStarted && !this.gameCompleted && this.gameTime >= 60) {
+    if (this.gameStarted && !this.gameCompleted && this.gameTime >= 30) {
       this.timeoutOccurred = true;
       this.appInsights.trackEvent('GameTimeout', { time: this.gameTime + (this.gameTimeMs / 1000) });
       this.completeGame();
