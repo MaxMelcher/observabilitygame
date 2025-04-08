@@ -369,16 +369,26 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     if (playerBottom < -1) {
       this.respawnPlayer();
       if (this.gameStarted && !this.gameCompleted) {
-        // Add 1 second penalty for touching the ground
+        // Add 5 second penalty for touching the ground
         this.startTime -= 5000;
-        this.appInsights.trackEvent('GroundTouchPenalty', { time: this.gameTime + (this.gameTimeMs / 1000) });
+        const currentTime = this.gameTime + (this.gameTimeMs / 1000);
+        this.appInsights.trackEvent('GameFailed', { 
+          reason: 'GroundTouch',
+          time: currentTime.toString(),
+          ...(this.playerName && { playerName: this.playerName })
+        });
       }
     }
 
     // Check for timeout
     if (this.gameStarted && !this.gameCompleted && this.gameTime >= 30) {
       this.timeoutOccurred = true;
-      this.appInsights.trackEvent('GameTimeout', { time: this.gameTime + (this.gameTimeMs / 1000) });
+      const currentTime = this.gameTime + (this.gameTimeMs / 1000);
+      this.appInsights.trackEvent('GameFailed', {
+        reason: 'Timeout',
+        time: currentTime.toString(),
+        ...(this.playerName && { playerName: this.playerName })
+      });
       this.completeGame();
     }
 
@@ -484,6 +494,16 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       // Disable controls
       this.gameStarted = false;
       
+      // Track game completion with App Insights
+      const completionTime = this.gameTime + (this.gameTimeMs / 1000);
+      const properties: { [key: string]: string } = {
+        time: completionTime.toString()
+      };
+      if (this.playerName) {
+        properties['playerName'] = this.playerName;
+      }
+      this.appInsights.trackEvent('GameCompleted', properties);
+
       // Focus the name input after a short delay to ensure the UI is ready
       setTimeout(() => {
         if (this.nameInput) {
@@ -496,7 +516,6 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   restartGame() {
     this.gameCompleted = false;
     this.scoreSubmitted = false;
-    this.playerName = '';
     this.errorMessage = '';
     this.gameTime = 0;
     this.gameTimeMs = 0;
