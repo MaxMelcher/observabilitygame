@@ -1,0 +1,21 @@
+<p>game works!</p>
+
+<div #gameCanvasContainer class="game-container">
+  <div class="game-ui">
+    <div *ngIf="gameTime" class="timer">Time: {{gameTime}}s</div>
+    
+    <div *ngIf="gameCompleted" class="leaderboard-form">
+      <h2>Game Complete!</h2>
+      <p>Your time: {{gameTime}}s</p>
+      <input [(ngModel)]="playerName" placeholder="Enter your name" />
+      <button (click)="submitScore()">Submit Score</button>
+    </div>
+
+    <div class="leaderboard">
+      <h3>Leaderboard</h3>
+      <div *ngFor="let score of leaderboardScores">
+        {{score.playerName}} - {{score.time}}s
+      </div>
+    </div>
+  </div>
+</div>
