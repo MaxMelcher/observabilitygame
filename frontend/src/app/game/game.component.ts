@@ -49,17 +49,17 @@ export class GameComponent implements AfterViewInit, OnDestroy {
 
   // Game dimensions
   private readonly WORLD_WIDTH = 40;  
-  private readonly WORLD_HEIGHT = 15;  // Reduced height for better visibility
+  private readonly WORLD_HEIGHT = 15;
   private readonly PLAYER_START_X = -16;  
-  private readonly PLAYER_START_Y = 4;  // Increased height for starting platform
+  private readonly PLAYER_START_Y = 2;  // Moved down
   private readonly GOAL_X = 16;  
-  private readonly GOAL_Y = 4;
+  private readonly GOAL_Y = 2;  // Moved down
 
   // Platform settings
   private readonly PLATFORM_SPEED = 0.02;
   private readonly VERTICAL_MOVE_DISTANCE = 3;
   private readonly HORIZONTAL_MOVE_DISTANCE = 4;
-  private readonly BOUNCE_FORCE = 0.5;
+  private readonly BOUNCE_FORCE = 0.6;
 
   gameCompleted = false;
   playerName = '';
@@ -140,28 +140,31 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     this.startPlatform.position.set(this.PLAYER_START_X, this.PLAYER_START_Y - 1, 0);
     this.scene.add(this.startPlatform);
     
-    // Create static platforms
-    const platformPositions = [
-      { x: -12, y: 5 },
-      { x: -4, y: 5 },
-      { x: 4, y: 5 },
-      { x: 12, y: 5 }
+    // Create static platforms with random variations
+    const basePositions = [
+      { x: -12, y: 3 },
+      { x: -4, y: 3 },
+      { x: 4, y: 3 },
+      { x: 12, y: 3 }
     ];
 
-    for (const pos of platformPositions) {
+    for (const pos of basePositions) {
       const platform = new THREE.Mesh(platformGeometry, platformMaterial);
-      platform.position.set(pos.x, pos.y, 0);
+      // Add some randomness to platform positions
+      const randomX = pos.x + (Math.random() * 2 - 1);
+      const randomY = pos.y + (Math.random() * 1.5 - 0.75);
+      platform.position.set(randomX, randomY, 0);
       this.platforms.push(platform);
       this.scene.add(platform);
     }
 
-    // Add bounce platforms (blue)
+    // Add bounce platforms (blue) lower
     const bouncePlatformGeometry = new THREE.PlaneGeometry(2, 0.5);
     const bouncePlatformMaterial = new THREE.MeshLambertMaterial({ color: 0x2196F3, side: THREE.DoubleSide });
     
     const bouncePositions = [
-      { x: -6, y: 3 },
-      { x: 6, y: 3 }
+      { x: -6, y: 5 },   // Lowered
+      { x: 6, y: 5.5 }   // Lowered
     ];
 
     for (const pos of bouncePositions) {
@@ -177,10 +180,10 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     // Add moving platforms
     const movingPlatformMaterial = new THREE.MeshLambertMaterial({ color: 0xe91e63, side: THREE.DoubleSide });
 
-    // Horizontal moving platforms
+    // Horizontal moving platforms (red bars)
     const horizontalMovers = [
-      { centerX: -8, y: 4 },
-      { centerX: 8, y: 4 }
+      { centerX: -8, y: 2 },
+      { centerX: 8, y: 2 }
     ];
 
     for (const pos of horizontalMovers) {
@@ -193,8 +196,8 @@ export class GameComponent implements AfterViewInit, OnDestroy {
         startPos: new THREE.Vector2(pos.centerX - this.HORIZONTAL_MOVE_DISTANCE, pos.y),
         endPos: new THREE.Vector2(pos.centerX + this.HORIZONTAL_MOVE_DISTANCE, pos.y),
         speed: this.PLATFORM_SPEED,
-        progress: 0,
-        direction: 1
+        progress: Math.random(),
+        direction: Math.random() < 0.5 ? 1 : -1
       });
       
       this.scene.add(platform);
@@ -202,7 +205,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
 
     // Vertical moving platforms
     const verticalMovers = [
-      { x: 0, centerY: 4 }
+      { x: 0, centerY: 2 }
     ];
 
     for (const pos of verticalMovers) {
@@ -289,8 +292,14 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       // Calculate new position
       const newX = platform.startPos.x + (platform.endPos.x - platform.startPos.x) * platform.progress;
       const newY = platform.startPos.y + (platform.endPos.y - platform.startPos.y) * platform.progress;
+      
+      // If this is a horizontal platform (red bar), we need to check collisions differently
+      if (platform.mesh.rotation.z === Math.PI / 2) {
+        platform.mesh.position.set(newX, newY, 0);
+        continue; // Skip collision check for horizontal bars
+      }
 
-      // Check collision with static platforms before applying new position
+      // Only check collisions for vertical moving platforms
       platform.mesh.position.set(newX, newY, 0);
       let collision = false;
       
@@ -329,7 +338,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       this.respawnPlayer();
     }
 
-    // Check platform collisions including start platform and moving platforms
+    // Check platform collisions
     let onPlatform = false;
     const allPlatforms = [
       ...this.platforms, 
@@ -350,19 +359,40 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     // Then check regular platforms
     for (const platform of allPlatforms) {
       if (this.checkCollision(this.player, platform)) {
-        if (this.playerVelocity.y < 0) {
-          this.player.position.y = platform.position.y + 0.75;
-          this.playerVelocity.y = 0;
-          this.isJumping = false;
-          onPlatform = true;
-
-          // If it's a moving platform, move the player with it
-          const movingPlatform = this.movingPlatforms.find(p => p.mesh === platform);
-          if (movingPlatform) {
-            // Add platform's horizontal movement to player
+        // Get the moving platform if this is one
+        const movingPlatform = this.movingPlatforms.find(p => p.mesh === platform);
+        
+        if (movingPlatform) {
+          // For vertical moving platforms
+          if (this.playerVelocity.y < 0) {
+            this.player.position.y = platform.position.y + 0.75;
+            this.playerVelocity.y = 0;
+            this.isJumping = false;
+            onPlatform = true;
+          }
+          
+          // For horizontal moving platforms (red bars)
+          const moveDir = platform.rotation.z === Math.PI / 2 ? 'horizontal' : 'vertical';
+          if (moveDir === 'horizontal') {
+            // Push the player horizontally
             const platformDeltaX = (movingPlatform.endPos.x - movingPlatform.startPos.x) * 
-                                 movingPlatform.speed * movingPlatform.direction;
+                                movingPlatform.speed * movingPlatform.direction;
             this.player.position.x += platformDeltaX;
+            
+            // If hitting from the side, push away
+            const playerCenter = this.player.position.x;
+            const platformCenter = platform.position.x;
+            if (Math.abs(playerCenter - platformCenter) > 0.4) {
+              this.playerVelocity.x = playerCenter < platformCenter ? -0.3 : 0.3;
+            }
+          }
+        } else {
+          // Regular platform collision
+          if (this.playerVelocity.y < 0) {
+            this.player.position.y = platform.position.y + 0.75;
+            this.playerVelocity.y = 0;
+            this.isJumping = false;
+            onPlatform = true;
           }
         }
       }
