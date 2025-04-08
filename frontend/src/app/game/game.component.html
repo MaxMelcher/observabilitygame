@@ -12,7 +12,7 @@
       <p *ngIf="timeoutOccurred" class="timeout-message">Sorry, you didn't make it in time!</p>
       <p>Your time: {{gameTime}}.{{gameTimeMs.toString().padStart(3, '0')}}s</p>
       <div *ngIf="!scoreSubmitted && !timeoutOccurred">
-        <input #nameInput [(ngModel)]="playerName" 
+        <input #nameInput [(ngModel)]="playerName" maxlength="50"
                (ngModelChange)="onNameChange($event)"
                (keyup.enter)="submitScore()"
                placeholder="Enter your name" data-1p-ignore/>
