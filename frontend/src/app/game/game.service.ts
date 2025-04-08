@@ -1,32 +1,42 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
+import { Observable, catchError } from 'rxjs';
+import { AppInsightsService } from '../services/app-insights.service';
 
-interface Score {
+interface PlayerScore {
   playerName: string;
-  time: number;
+  time: string;
+  dateRecorded: string;
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class GameService {
-  private apiUrl = 'http://localhost:5000/api'; // Will connect to backend later
+  private apiUrl = 'https://localhost:7267/api'; // Update with your backend URL
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    private appInsights: AppInsightsService
+  ) { }
 
-  // Stub implementation until backend is ready
-  submitScore(score: Score): Observable<any> {
-    console.log('Score submitted:', score);
-    return of({ success: true });
+  getTopScores(): Observable<PlayerScore[]> {
+    this.appInsights.trackEvent('GetTopScores');
+    return this.http.get<PlayerScore[]>(`${this.apiUrl}/scores`).pipe(
+      catchError(error => {
+        this.appInsights.trackException(error);
+        throw error;
+      })
+    );
   }
 
-  // Stub implementation until backend is ready
-  getLeaderboard(): Observable<Score[]> {
-    return of([
-      { playerName: 'Player 1', time: 30 },
-      { playerName: 'Player 2', time: 45 },
-      { playerName: 'Player 3', time: 60 }
-    ]);
+  submitScore(score: PlayerScore): Observable<PlayerScore> {
+    this.appInsights.trackEvent('SubmitScore', { playerName: score.playerName, time: score.time });
+    return this.http.post<PlayerScore>(`${this.apiUrl}/scores`, score).pipe(
+      catchError(error => {
+        this.appInsights.trackException(error);
+        throw error;
+      })
+    );
   }
 }

@@ -1,14 +1,21 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
-import { GameComponent } from './game/game.component';
+import { AppInsightsService } from './services/app-insights.service';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, GameComponent],
+  standalone: true,
+  imports: [CommonModule, RouterOutlet],
   templateUrl: './app.component.html',
-  styleUrl: './app.component.sass',
-  standalone: true
+  styleUrl: './app.component.sass'
 })
-export class AppComponent {
-  title = 'Observability-Game';
+export class AppComponent implements OnInit {
+  title = 'frontend';
+
+  constructor(private appInsightsService: AppInsightsService) {}
+
+  ngOnInit(): void {
+    this.appInsightsService.init();
+  }
 }

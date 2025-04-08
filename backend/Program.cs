@@ -1,41 +1,82 @@
+using Azure;
+using Azure.AI.OpenAI;
+using backend.Data;
+using backend.Models;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Observability Game API", Version = "v1" });
+});
+builder.Services.AddApplicationInsightsTelemetry();
+builder.Services.AddCors();
+
+// Add database context
+builder.Services.AddDbContext<GameDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Add Azure OpenAI client
+builder.Services.AddSingleton(new AzureOpenAIClient(
+    new Uri(builder.Configuration["AzureOpenAI:Endpoint"]!),
+    new AzureKeyCredential(builder.Configuration["AzureOpenAI:ApiKey"]!)
+));
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
+app.UseCors(builder => builder
+    .AllowAnyOrigin()
+    .AllowAnyMethod()
+    .AllowAnyHeader());
 
-var summaries = new[]
+// Get top scores
+app.MapGet("/api/scores", async (GameDbContext db) =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
+    return await db.PlayerScores
+        .OrderBy(s => s.Time)
+        .Take(10)
+        .ToListAsync();
 })
-.WithName("GetWeatherForecast");
+.WithName("GetTopScores");
+
+// Submit new score
+app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, PlayerScore score) =>
+{
+    try
+    {
+        // Check for profanity using Azure OpenAI GPT-4
+        ChatCompletion completion = openAI.CompleteChat(
+            [
+                new SystemChatMessage(@""),
+                new UserChatMessage($"{score.PlayerName}"),
+            ]);
+
+        var result = completion.Content[0].Text;
+
+        score.Created = DateTime.UtcNow;
+        db.PlayerScores.Add(score);
+        await db.SaveChangesAsync();
+
+        return Results.Created($"/api/scores/{score.Id}", score);
+    }
+    catch (Exception)
+    {
+        // Application Insights will automatically capture this exception
+        return Results.StatusCode(500);
+    }
+})
+.WithName("SubmitScore");
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
