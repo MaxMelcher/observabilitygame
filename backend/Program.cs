@@ -92,7 +92,8 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
         // Verify hash
         var secretKey = "observability-game-2025"; // In production, this should be in configuration
         var timeStr = score.Time.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
-        var payload = $"{score.PlayerName}|{timeStr}|{score.Created.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")}|{secretKey}";
+        var createdMs = ((DateTimeOffset)score.Created.ToUniversalTime()).ToUnixTimeMilliseconds();
+        var payload = $"{score.PlayerName}|{timeStr}|{createdMs}|{secretKey}";
         logger.LogInformation("Backend payload for hash: {Payload}", payload);
         var computedHash = ComputeSha256Hash(payload);
         logger.LogInformation("Backend computed hash: {Hash}, Received hash: {ReceivedHash}", computedHash, score.Hash);
