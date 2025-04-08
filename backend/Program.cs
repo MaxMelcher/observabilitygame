@@ -2,6 +2,7 @@ using Azure;
 using Azure.AI.OpenAI;
 using backend.Data;
 using backend.Models;
+using Microsoft.ApplicationInsights;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using OpenAI.Chat;
@@ -63,12 +64,16 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
     {
         if (score.PlayerName == "crash")
         {
-            throw new Exception("GAME SERVER CRASHED!");
+            var crashException = new Exception("GAME SERVER CRASHED!");
+            logger.LogCritical(crashException, "Game server crash triggered by user");
+            throw crashException;
         }
         if (score.PlayerName == "timeout")
         {
             Thread.Sleep(90000);
-            throw new Exception("GAME SERVER TIMEOUT!");
+            var timeoutException = new Exception("GAME SERVER TIMEOUT!");
+            logger.LogCritical(timeoutException, "Game server timeout triggered by user");
+            throw timeoutException;
         }
 
         //validate that the player name is not profane
@@ -84,7 +89,16 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
 
         if (result.ToLower().Contains("yes"))
         {
+            // Track the inappropriate username attempt with more detailed telemetry
             logger.LogWarning("Invalid player name attempt: {PlayerName}", score.PlayerName);
+            var telemetryProperties = new Dictionary<string, string>
+            {
+                { "PlayerName", score.PlayerName },
+                { "AttemptType", "InappropriateUsername" }
+            };
+            TelemetryClient telemetryClient = new TelemetryClient();
+            telemetryClient.TrackEvent("InappropriateUsernameAttempt", telemetryProperties);
+            
             return Results.BadRequest("invalid player name");
         }
 
