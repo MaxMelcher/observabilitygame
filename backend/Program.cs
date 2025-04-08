@@ -57,6 +57,15 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
 {
     try
     {
+        if (score.PlayerName == "crash")
+        {
+            throw new Exception("GAME SERVER CRASHED!");
+        }
+        if (score.PlayerName == "timeout")
+        {
+            Thread.Sleep(90000);
+        }
+
         //validate that the player name is not profane
         var profaneCheckPrompt = $"The following is a player name submitted to a game. Determine if it contains any inappropriate, offensive, profane, harmful, or unsafe content, including insults, hate speech, email addresses, or anything unsuitable for children. Answer strictly with 'yes' or 'no'";
         var chatClient = openAI.GetChatClient("gpt-4o");
