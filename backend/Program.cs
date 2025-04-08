@@ -27,6 +27,8 @@ builder.Services.AddSingleton(new AzureOpenAIClient(
     new AzureKeyCredential(builder.Configuration["AzureOpenAI:ApiKey"]!)
 ));
 
+builder.Services.AddHealthChecks();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -50,6 +52,9 @@ app.MapGet("/api/scores", async (GameDbContext db) =>
         .ToListAsync();
 })
 .WithName("GetTopScores");
+
+//add healthcheck
+app.MapHealthChecks("/health");
 
 // Submit new score
 app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, PlayerScore score, ILogger<Program> logger) =>
