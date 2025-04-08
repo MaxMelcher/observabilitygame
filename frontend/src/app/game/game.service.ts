@@ -5,7 +5,7 @@ import { AppInsightsService } from '../services/app-insights.service';
 
 interface PlayerScore {
   playerName: string;
-  time: number;
+  time: number;  // time in milliseconds
   created: Date;
 }
 

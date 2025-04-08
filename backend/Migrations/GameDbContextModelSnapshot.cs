@@ -37,8 +37,8 @@ namespace backend.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<TimeSpan>("Time")
-                        .HasColumnType("time");
+                    b.Property<double>("Time")
+                        .HasColumnType("float");
 
                     b.HasKey("Id");
 
