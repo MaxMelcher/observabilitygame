@@ -14,7 +14,7 @@ export class AppInsightsService {
     this.angularPlugin = new AngularPlugin();
     this.appInsights = new ApplicationInsights({
       config: {
-        connectionString: 'YOUR_APP_INSIGHTS_CONNECTION_STRING',
+        connectionString: '',
         enableAutoRouteTracking: true,
         extensions: [this.angularPlugin],
         extensionConfig: {
