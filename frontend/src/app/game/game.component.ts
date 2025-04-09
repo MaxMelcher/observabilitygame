@@ -359,6 +359,19 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     // Update moving platforms
     this.updateMovingPlatforms();
     
+    // Check for timeout (30 seconds)
+    if (this.gameStarted && !this.gameCompleted && !this.timeoutOccurred && this.gameTime >= 30) {
+      this.timeoutOccurred = true;
+      this.respawnPlayer();
+      const currentTime = this.gameTime + (this.gameTimeMs / 1000);
+      this.appInsights.trackEvent('GameFailed', { 
+        reason: 'TimeOut',
+        time: currentTime.toString(),
+        ...(this.playerName && { playerName: this.playerName })
+      });
+      this.startTime = Date.now(); // Reset the timer
+    }
+    
     // Check ground collision for respawn and penalty
     const playerBottom = this.player.position.y - 0.5;
     if (playerBottom < -1) {
