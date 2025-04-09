@@ -9,7 +9,7 @@ interface MovingPlatform {
   mesh: THREE.Mesh;
   startPos: THREE.Vector2;
   endPos: THREE.Vector2;
-  speed: number;
+  speed: number;  // Speed in units per second
   progress: number;
   direction: 1 | -1;
 }
@@ -33,6 +33,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   private scene!: THREE.Scene;
   private camera!: THREE.OrthographicCamera;
   private renderer!: THREE.WebGLRenderer;
+  private clock: THREE.Clock = new THREE.Clock();  // Add clock
   private player!: THREE.Mesh;
   private ground!: THREE.Mesh;
   private platforms: THREE.Mesh[] = [];
@@ -54,15 +55,23 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   private readonly WORLD_WIDTH = 40;  
   private readonly WORLD_HEIGHT = 15;
   private readonly PLAYER_START_X = -16;  
-  private readonly PLAYER_START_Y = 2;  // Moved down
+  private readonly PLAYER_START_Y = 2;
   private readonly GOAL_X = 16;  
-  private readonly GOAL_Y = 2;  // Moved down
+  private readonly GOAL_Y = 2;
+
+  // Movement speeds (units per second)
+  private readonly PLAYER_MOVE_SPEED = 12; // 12 units per second
+  private readonly PLAYER_JUMP_FORCE = 18; // 18 units per second
+  private readonly GRAVITY = 45; // 45 units per second squared
+  private readonly PLATFORM_MOVE_SPEED = 0.8; // Platform movement scaling factor
 
   // Platform settings
-  private readonly PLATFORM_SPEED = 0.02;
   private readonly VERTICAL_MOVE_DISTANCE = 3;
   private readonly HORIZONTAL_MOVE_DISTANCE = 4;
-  private readonly BOUNCE_FORCE = 0.6;
+  private readonly BOUNCE_FORCE = 1.8; // Increased from 0.6 to 1.8 (3x higher)
+
+  // Platform movement properties
+  private readonly PLATFORM_CYCLE_SPEED = 3; // Speed of the movement cycle
 
   gameCompleted = false;
   timeoutOccurred = false;
@@ -71,6 +80,8 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   isSubmittingScore = false;  // Add this line
   leaderboardScores: Array<{playerName: string, time: number}> = [];
   errorMessage = '';
+
+  private moveDirection = new THREE.Vector2();
 
   constructor(
     private gameService: GameService,
@@ -218,6 +229,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       { centerX: 8, y: 2 }
     ];
 
+    // Update the horizontal moving platforms initialization
     for (const pos of horizontalMovers) {
       const platform = new THREE.Mesh(platformGeometry, movingPlatformMaterial);
       platform.position.set(pos.centerX, pos.y, 0);
@@ -227,7 +239,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
         mesh: platform,
         startPos: new THREE.Vector2(pos.centerX - this.HORIZONTAL_MOVE_DISTANCE, pos.y),
         endPos: new THREE.Vector2(pos.centerX + this.HORIZONTAL_MOVE_DISTANCE, pos.y),
-        speed: this.PLATFORM_SPEED,
+        speed: this.PLATFORM_MOVE_SPEED,
         progress: Math.random(),
         direction: Math.random() < 0.5 ? 1 : -1
       });
@@ -240,6 +252,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       { x: 0, centerY: 2 }
     ];
 
+    // Update vertical moving platforms initialization
     for (const pos of verticalMovers) {
       const platform = new THREE.Mesh(platformGeometry, movingPlatformMaterial);
       platform.position.set(pos.x, pos.centerY, 0);
@@ -248,7 +261,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
         mesh: platform,
         startPos: new THREE.Vector2(pos.x, pos.centerY - this.VERTICAL_MOVE_DISTANCE),
         endPos: new THREE.Vector2(pos.x, pos.centerY + this.VERTICAL_MOVE_DISTANCE),
-        speed: this.PLATFORM_SPEED,
+        speed: this.PLATFORM_MOVE_SPEED,
         progress: 0,
         direction: 1
       });
@@ -279,14 +292,14 @@ export class GameComponent implements AfterViewInit, OnDestroy {
 
       switch (event.code) {
         case 'ArrowLeft':
-          this.playerVelocity.x = -0.2;
+          this.moveDirection.x = -1;
           break;
         case 'ArrowRight':
-          this.playerVelocity.x = 0.2;
+          this.moveDirection.x = 1;
           break;
         case 'Space':
           if (!this.isJumping) {
-            this.playerVelocity.y = 0.3;
+            this.playerVelocity.y = this.PLAYER_JUMP_FORCE;
             this.isJumping = true;
           }
           break;
@@ -296,57 +309,30 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     document.addEventListener('keyup', (event) => {
       switch (event.code) {
         case 'ArrowLeft':
+          if (this.moveDirection.x < 0) this.moveDirection.x = 0;
+          break;
         case 'ArrowRight':
-          this.playerVelocity.x = 0;
+          if (this.moveDirection.x > 0) this.moveDirection.x = 0;
           break;
       }
     });
   }
 
   private updateMovingPlatforms() {
+    const delta = this.clock.getDelta();
+    const time = this.clock.getElapsedTime();
+    
     for (const platform of this.movingPlatforms) {
-      // Store old position for collision check
-      const oldX = platform.mesh.position.x;
-      const oldY = platform.mesh.position.y;
-      
-      // Update progress
-      platform.progress += platform.speed * platform.direction;
-      
-      // Check bounds and reverse direction if needed
-      if (platform.progress >= 1) {
-        platform.progress = 1;
-        platform.direction = -1;
-      } else if (platform.progress <= 0) {
-        platform.progress = 0;
-        platform.direction = 1;
-      }
-
-      // Calculate new position
-      const newX = platform.startPos.x + (platform.endPos.x - platform.startPos.x) * platform.progress;
-      const newY = platform.startPos.y + (platform.endPos.y - platform.startPos.y) * platform.progress;
-      
-      // If this is a horizontal platform (red bar), we need to check collisions differently
-      if (platform.mesh.rotation.z === Math.PI / 2) {
-        platform.mesh.position.set(newX, newY, 0);
-        continue; // Skip collision check for horizontal bars
-      }
-
-      // Only check collisions for vertical moving platforms
-      platform.mesh.position.set(newX, newY, 0);
-      let collision = false;
-      
-      for (const staticPlatform of this.platforms) {
-        if (this.checkCollision(platform.mesh, staticPlatform)) {
-          collision = true;
-          break;
-        }
-      }
-
-      // If there's a collision, revert to old position and reverse direction
-      if (collision) {
-        platform.mesh.position.set(oldX, oldY, 0);
-        platform.direction *= -1;
-        platform.progress = platform.direction === 1 ? 0 : 1;
+      if (platform.mesh.rotation.z === Math.PI / 2) { // Horizontal moving platforms
+        // Use sine wave for smooth back-and-forth movement
+        const xOffset = Math.sin(time * 3) * this.HORIZONTAL_MOVE_DISTANCE;
+        const newX = platform.startPos.x + this.HORIZONTAL_MOVE_DISTANCE + xOffset;
+        platform.mesh.position.x = newX;
+      } else { // Vertical moving platforms
+        // Use cosine wave for smooth up-down movement
+        const yOffset = Math.cos(time * 3) * this.VERTICAL_MOVE_DISTANCE;
+        const newY = platform.startPos.y + this.VERTICAL_MOVE_DISTANCE + yOffset;
+        platform.mesh.position.y = newY;
       }
     }
   }
@@ -354,12 +340,21 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   private animate() {
     this.animationId = requestAnimationFrame(() => this.animate());
     
-    // Update player position
-    this.player.position.x += this.playerVelocity.x;
-    this.player.position.y += this.playerVelocity.y;
+    const delta = this.clock.getDelta();
     
-    // Apply gravity
-    this.playerVelocity.y -= 0.015;
+    // Update player velocity based on move direction
+    if (this.moveDirection.x !== 0) {
+      this.playerVelocity.x = this.moveDirection.x * this.PLAYER_MOVE_SPEED * delta;
+    } else {
+      this.playerVelocity.x = 0;
+    }
+    
+    // Apply gravity with delta time
+    this.playerVelocity.y -= this.GRAVITY * delta;
+    
+    // Update player position with current velocity
+    this.player.position.x += this.playerVelocity.x;
+    this.player.position.y += this.playerVelocity.y * delta;
     
     // Update moving platforms
     this.updateMovingPlatforms();
@@ -369,8 +364,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     if (playerBottom < -1) {
       this.respawnPlayer();
       if (this.gameStarted && !this.gameCompleted) {
-        // Add 5 second penalty for touching the ground
-        this.startTime -= 5000;
+        this.startTime -= 5000; // 5 second penalty
         const currentTime = this.gameTime + (this.gameTimeMs / 1000);
         this.appInsights.trackEvent('GameFailed', { 
           reason: 'GroundTouch',
@@ -380,16 +374,13 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       }
     }
 
-    // Check for timeout
-    if (this.gameStarted && !this.gameCompleted && this.gameTime >= 30) {
-      this.timeoutOccurred = true;
-      const currentTime = this.gameTime + (this.gameTimeMs / 1000);
-      this.appInsights.trackEvent('GameFailed', {
-        reason: 'Timeout',
-        time: currentTime.toString(),
-        ...(this.playerName && { playerName: this.playerName })
-      });
-      this.completeGame();
+    // Check bounce platforms first
+    for (const bouncePlatform of this.bouncePlatforms) {
+      if (this.checkCollision(this.player, bouncePlatform.mesh) && this.playerVelocity.y <= 0) {
+        // Apply bounce force scaled by the bounce force value
+        this.playerVelocity.y = this.PLAYER_JUMP_FORCE * bouncePlatform.bounceForce;
+        this.isJumping = true;
+      }
     }
 
     // Check platform collisions
@@ -401,43 +392,24 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       ...this.movingPlatforms.map(p => p.mesh)
     ];
     
-    // First check bounce platforms
-    for (const bouncePlatform of this.bouncePlatforms) {
-      if (this.checkCollision(this.player, bouncePlatform.mesh)) {
-        // Bounce the player up with the bounce force
-        this.playerVelocity.y = bouncePlatform.bounceForce;
-        this.isJumping = true;
-      }
-    }
-
-    // Then check regular platforms
     for (const platform of allPlatforms) {
       if (this.checkCollision(this.player, platform)) {
-        // Get the moving platform if this is one
         const movingPlatform = this.movingPlatforms.find(p => p.mesh === platform);
         
         if (movingPlatform) {
-          // For vertical moving platforms
-          if (this.playerVelocity.y < 0) {
-            this.player.position.y = platform.position.y + 0.75;
-            this.playerVelocity.y = 0;
-            this.isJumping = false;
-            onPlatform = true;
-          }
-          
-          // For horizontal moving platforms (red bars)
-          const moveDir = platform.rotation.z === Math.PI / 2 ? 'horizontal' : 'vertical';
-          if (moveDir === 'horizontal') {
-            // Push the player horizontally
-            const platformDeltaX = (movingPlatform.endPos.x - movingPlatform.startPos.x) * 
-                                movingPlatform.speed * movingPlatform.direction;
-            this.player.position.x += platformDeltaX;
+          if (platform.rotation.z === Math.PI / 2) { // Horizontal moving platform
+            // Calculate platform movement
+            const platformVelocityX = (movingPlatform.endPos.x - movingPlatform.startPos.x) * 
+                                    movingPlatform.speed * movingPlatform.direction;
             
-            // If hitting from the side, push away
-            const playerCenter = this.player.position.x;
-            const platformCenter = platform.position.x;
-            if (Math.abs(playerCenter - platformCenter) > 0.4) {
-              this.playerVelocity.x = playerCenter < platformCenter ? -0.3 : 0.3;
+            // Move player with platform
+            this.player.position.x += platformVelocityX * delta;
+          } else { // Vertical moving platform
+            if (this.playerVelocity.y < 0) {
+              this.player.position.y = platform.position.y + 0.75;
+              this.playerVelocity.y = 0;
+              this.isJumping = false;
+              onPlatform = true;
             }
           }
         } else {
