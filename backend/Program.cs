@@ -108,7 +108,7 @@ app.MapPost("/api/scores", async (GameDbContext db, AzureOpenAIClient openAI, Pl
                 { "AttemptType", "InvalidHash" }
             };
             telemetryClient.TrackEvent("InvalidHashAttempt", telemetryProperties);
-            return Results.BadRequest("invalid hash");
+            return Results.BadRequest("nice try! Cheater... :)");
         }
 
         //validate that the player name is not profane

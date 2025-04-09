@@ -536,7 +536,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
           error: (error) => {
             console.error('Failed to submit score:', error);
             if (error.status === 400) {
-              if (error.error === 'invalid hash') {
+              if (error.error === 'nice try! Cheater... :)') {
                 this.errorMessage = 'Score submission failed: Data integrity check failed.';
               } else {
                 this.errorMessage = 'Username contains inappropriate content or email. Please choose a different name.';
